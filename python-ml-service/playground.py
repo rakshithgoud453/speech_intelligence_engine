@@ -4,12 +4,18 @@ import streamlit as st
 import numpy as np
 import torch
 
-# Add repository root to python path
+# Add repository root and parent directory to python path
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
+parent_dir = os.path.abspath(os.path.join(repo_root, ".."))
+
+for p in [repo_root, parent_dir]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 from speech_intelligence_engine import SpeechLearningEngine
+
+
+
 
 st.set_page_config(page_title="Speech Intelligence Engine Explorer", layout="wide")
 
