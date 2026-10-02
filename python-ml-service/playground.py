@@ -122,20 +122,63 @@ if tab1:
                         st.info("No existing prototype matched — created novel acoustic prototypes!")
 
 with tab2:
-    st.markdown("#### ☁️ Remote Colab & Google Drive Status Sync")
-    st.markdown("Monitors training execution and model checkpoints stored on your 5TB Google Drive (`rakshithgoud453@gmail.com`).")
+    st.markdown("#### ☁️ Remote Colab & Drive Checkpoint Inspector")
+    st.markdown("Inspect training execution, model checkpoint weights (`.pt`), and telemetry stored on Google Drive or local workspace.")
 
-    drive_status_path = "/content/drive/MyDrive/speech_intelligence_engine/outputs/status.json"
-    if os.path.exists(drive_status_path):
-        with open(drive_status_path, "r") as f:
-            status_data = json.load(f)
-        st.success("✓ Google Drive Training Status Active!")
-        st.json(status_data)
-    else:
-        st.info(
-            "Remote Colab status file not found locally. To view live remote status, run Step 6 in your Google Colab notebook: "
-            "`speech_intelligence_colab_trainer.ipynb`."
-        )
+    checkpoint_dir = os.path.abspath(os.path.join(repo_root, "checkpoints"))
+    local_checkpoints = []
+    if os.path.exists(checkpoint_dir):
+        local_checkpoints = [os.path.join(checkpoint_dir, f) for f in os.listdir(checkpoint_dir) if f.endswith(".pt")]
+
+    c_col1, c_col2 = st.columns([1, 1])
+    with c_col1:
+        st.markdown("**Load Saved Model Checkpoint (.pt):**")
+        uploaded_ckpt = st.file_uploader("Upload PyTorch Checkpoint (.pt)", type=["pt"])
+
+        selected_ckpt_path = None
+        if uploaded_ckpt is not None:
+            temp_ckpt = f"/tmp/{uploaded_ckpt.name}"
+            with open(temp_ckpt, "wb") as f:
+                f.write(uploaded_ckpt.getbuffer())
+            selected_ckpt_path = temp_ckpt
+        elif local_checkpoints:
+            selected_ckpt_path = st.selectbox("Select Checkpoint from Workspace:", local_checkpoints)
+
+        if selected_ckpt_path and os.path.exists(selected_ckpt_path):
+            try:
+                import torch
+                ckpt = torch.load(selected_ckpt_path, map_location="cpu")
+                st.success(f"✓ Loaded Checkpoint: `{os.path.basename(selected_ckpt_path)}`")
+
+                m_col1, m_col2, m_col3 = st.columns(3)
+                m_col1.metric("Training Step", ckpt.get("step", "N/A"))
+                m_col2.metric("Saved Keys", len(ckpt.get("model_state_dict", {})))
+
+                metrics = ckpt.get("metrics", {})
+                if metrics:
+                    m_col3.metric("Episodes", metrics.get("episodes", "N/A"))
+                    st.json(metrics)
+
+                st.markdown("**State Dict Tensors:**")
+                st.json({k: list(v.shape) for k, v in ckpt.get("model_state_dict", {}).items()})
+            except Exception as ex:
+                st.error(f"Failed to inspect checkpoint: {ex}")
+        else:
+            st.info("No checkpoint file selected. Run Colab training or upload a `.pt` file above.")
+
+    with c_col2:
+        st.markdown("**Google Drive Remote Telemetry Status (`status.json`):**")
+        drive_status_path = "/content/drive/MyDrive/speech_intelligence_engine/outputs/status.json"
+        local_status_path = os.path.abspath(os.path.join(repo_root, "outputs", "status.json"))
+
+        active_status_path = local_status_path if os.path.exists(local_status_path) else drive_status_path
+        if os.path.exists(active_status_path):
+            with open(active_status_path, "r") as f:
+                status_data = json.load(f)
+            st.success(f"✓ Training Telemetry Active (`{active_status_path}`)!")
+            st.json(status_data)
+        else:
+            st.info("Colab telemetry status file will appear here automatically when Step 6 finishes.")
 
 st.divider()
 
