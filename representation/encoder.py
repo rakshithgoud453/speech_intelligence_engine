@@ -246,4 +246,9 @@ class SpeechEncoder:
             )
             tensor_wav = resampler(tensor_wav)
 
+        # Pad short waveforms to minimum 1600 samples (0.1s) to prevent zero-frame SSL outputs
+        if tensor_wav.shape[1] < 1600:
+            tensor_wav = torch.nn.functional.pad(tensor_wav, (0, 1600 - tensor_wav.shape[1]))
+
         return tensor_wav.to(self.device)
+
