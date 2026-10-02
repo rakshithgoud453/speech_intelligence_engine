@@ -420,26 +420,40 @@ class SpeechLearningEngine:
         audio_input: str | np.ndarray,
         sr: Optional[int],
     ) -> Tuple[np.ndarray, int]:
-        """Load and normalize audio to 16kHz mono float32."""
+        """Load and normalize audio to 16kHz mono float32 without scipy/librosa dependency."""
         if isinstance(audio_input, str):
             if not os.path.exists(audio_input):
                 raise FileNotFoundError(f"Audio file not found: {audio_input}")
-            waveform, file_sr = librosa.load(
-                audio_input, sr=16000, mono=True
-            )
-            return waveform.astype(np.float32), 16000
+            try:
+                import soundfile as sf
+                waveform, file_sr = sf.read(audio_input, dtype="float32")
+                if waveform.ndim > 1:
+                    waveform = waveform.mean(axis=1)
+                if file_sr != 16000:
+                    import torchaudio
+                    wav_t = torch.from_numpy(waveform).unsqueeze(0)
+                    resampler = torchaudio.transforms.Resample(orig_freq=file_sr, new_freq=16000)
+                    waveform = resampler(wav_t).squeeze(0).numpy()
+                return waveform.astype(np.float32), 16000
+            except Exception:
+                import librosa
+                waveform, _ = librosa.load(audio_input, sr=16000, mono=True)
+                return waveform.astype(np.float32), 16000
 
         elif isinstance(audio_input, np.ndarray):
-            waveform = audio_input
+            waveform = audio_input.astype(np.float32)
             if waveform.ndim > 1:
                 waveform = np.mean(waveform, axis=0)
             if sr is not None and sr != 16000:
-                waveform = librosa.resample(
-                    waveform, orig_sr=sr, target_sr=16000
-                )
+                try:
+                    import torchaudio
+                    wav_t = torch.from_numpy(waveform).unsqueeze(0)
+                    resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000)
+                    waveform = resampler(wav_t).squeeze(0).numpy()
+                except Exception:
+                    import librosa
+                    waveform = librosa.resample(waveform, orig_sr=sr, target_sr=16000)
             return waveform.astype(np.float32), 16000
 
         else:
-            raise TypeError(
-                "audio_input must be a file path or numpy array."
-            )
+            raise TypeError("audio_input must be a file path or numpy array.")
