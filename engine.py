@@ -425,12 +425,13 @@ class SpeechLearningEngine:
             if not os.path.exists(audio_input):
                 raise FileNotFoundError(f"Audio file not found: {audio_input}")
             try:
+                import torch
+                import torchaudio
                 import soundfile as sf
                 waveform, file_sr = sf.read(audio_input, dtype="float32")
                 if waveform.ndim > 1:
                     waveform = waveform.mean(axis=1)
                 if file_sr != 16000:
-                    import torchaudio
                     wav_t = torch.from_numpy(waveform).unsqueeze(0)
                     resampler = torchaudio.transforms.Resample(orig_freq=file_sr, new_freq=16000)
                     waveform = resampler(wav_t).squeeze(0).numpy()
@@ -446,6 +447,7 @@ class SpeechLearningEngine:
                 waveform = np.mean(waveform, axis=0)
             if sr is not None and sr != 16000:
                 try:
+                    import torch
                     import torchaudio
                     wav_t = torch.from_numpy(waveform).unsqueeze(0)
                     resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000)
