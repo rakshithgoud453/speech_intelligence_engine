@@ -28,6 +28,10 @@ dev = [
     "pytest>=7.0",
 ]
 
-[tool.setuptools.packages.find]
-include = ["speech_intelligence_engine*"]
+[tool.setuptools]
+packages = ["speech_intelligence_engine"]
+
+[tool.setuptools.package-dir]
+speech_intelligence_engine = "."
+
 
