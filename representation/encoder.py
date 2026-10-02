@@ -164,30 +164,33 @@ class SpeechEncoder:
         """
         Encode a waveform into a temporal latent sequence.
 
-        This is the primary interface used by the learning engine.
-        The output preserves the full temporal dimension.
-
-        Args:
-            waveform: 1-D float32 audio array.
-            sr: Sample rate of the input audio.
-
-        Returns:
-            TemporalEmbedding containing the (T, D) sequence.
+        Uses 10-second chunking for constant low RAM consumption.
         """
         tensor_wav = self._prepare_waveform(waveform, sr)
-
-        with torch.no_grad():
-            all_layers, _ = self._model.extract_features(tensor_wav)
-
-        # Average over the selected layer range
+        max_chunk_samples = 10 * self.sample_rate
+        total_samples = tensor_wav.shape[1]
         layer_start, layer_end = self.extraction_layers
-        selected = torch.stack(all_layers[layer_start:layer_end], dim=0)
-        # selected: (num_layers, 1, T, D)
-        averaged = selected.mean(dim=0).squeeze(0).cpu().numpy()
-        # averaged: (T, D)
+
+        if total_samples <= max_chunk_samples:
+            with torch.no_grad():
+                all_layers, _ = self._model.extract_features(tensor_wav)
+            selected = torch.stack(all_layers[layer_start:layer_end], dim=0)
+            averaged = selected.mean(dim=0).squeeze(0).cpu().numpy()
+        else:
+            chunk_results = []
+            with torch.no_grad():
+                for start_idx in range(0, total_samples, max_chunk_samples):
+                    chunk_wav = tensor_wav[:, start_idx : start_idx + max_chunk_samples]
+                    if chunk_wav.shape[1] < 1600:
+                        chunk_wav = torch.nn.functional.pad(chunk_wav, (0, 1600 - chunk_wav.shape[1]))
+                    all_layers, _ = self._model.extract_features(chunk_wav)
+                    selected = torch.stack(all_layers[layer_start:layer_end], dim=0)
+                    chunk_avg = selected.mean(dim=0).squeeze(0).cpu().numpy()
+                    chunk_results.append(chunk_avg)
+            averaged = np.concatenate(chunk_results, axis=0)
 
         num_frames = averaged.shape[0]
-        duration_sec = tensor_wav.shape[1] / self.sample_rate
+        duration_sec = total_samples / self.sample_rate
         frame_times = np.linspace(0, duration_sec, num_frames)
 
         return TemporalEmbedding(
@@ -204,19 +207,29 @@ class SpeechEncoder:
     ) -> List[np.ndarray]:
         """
         Extract all 12 transformer layer activations.
-
-        Returns:
-            List of 12 arrays, each of shape (T, D).
         """
         tensor_wav = self._prepare_waveform(waveform, sr)
+        max_chunk_samples = 10 * self.sample_rate
+        total_samples = tensor_wav.shape[1]
 
-        with torch.no_grad():
-            all_layers, _ = self._model.extract_features(tensor_wav)
-
-        return [
-            layer.squeeze(0).cpu().numpy().astype(np.float32)
-            for layer in all_layers
-        ]
+        if total_samples <= max_chunk_samples:
+            with torch.no_grad():
+                all_layers, _ = self._model.extract_features(tensor_wav)
+            return [
+                layer.squeeze(0).cpu().numpy().astype(np.float32)
+                for layer in all_layers
+            ]
+        else:
+            layer_chunks = [[] for _ in range(12)]
+            with torch.no_grad():
+                for start_idx in range(0, total_samples, max_chunk_samples):
+                    chunk_wav = tensor_wav[:, start_idx : start_idx + max_chunk_samples]
+                    if chunk_wav.shape[1] < 1600:
+                        chunk_wav = torch.nn.functional.pad(chunk_wav, (0, 1600 - chunk_wav.shape[1]))
+                    all_layers, _ = self._model.extract_features(chunk_wav)
+                    for i, layer in enumerate(all_layers):
+                        layer_chunks[i].append(layer.squeeze(0).cpu().numpy().astype(np.float32))
+            return [np.concatenate(chunks, axis=0) for chunks in layer_chunks]
 
     def get_model(self) -> torch.nn.Module:
         """Return the underlying PyTorch model for fine-tuning."""

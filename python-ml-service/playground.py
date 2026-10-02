@@ -96,6 +96,7 @@ if tab1:
                 st.audio(temp_path, format="audio/wav")
 
         if audio_data is not None:
+            st.session_state["last_audio_path"] = audio_data
             if st.button("⚡ Assimilate Speech into Engine Memory"):
                 with st.spinner("Processing speech through HuBERT sensory cortex & updating memory..."):
                     res = engine.assimilate(audio_data, recording_id=recording_id)
@@ -228,10 +229,12 @@ st.subheader("4. Multimodal Speech-LLM Reasoning Payload")
 st.markdown("Inspect the exact 768-d latent payload & prosodic vector injected directly into the Speech-LLM token embedding space (Paradigm B).")
 
 query_input = st.text_input("Enter Reasoning Query for Speech Model:", value="Analyze vocal cadence, hesitation pauses, and emotional delivery.")
-if st.button("Generate Multimodal Payload"):
-    if 'temp_path' in locals() and os.path.exists(temp_path):
-        payload = engine.query_multimodal_speech(temp_path, prompt=query_input)
-        st.success("✓ Multimodal Speech Payload Generated")
-        st.json(payload)
+if st.button("⚡ Generate Multimodal Payload"):
+    target_path = st.session_state.get("last_audio_path")
+    if target_path and os.path.exists(target_path):
+        with st.spinner("Extracting 768-d continuous speech latent payload..."):
+            payload = engine.query_multimodal_speech(target_path, prompt=query_input)
+            st.success("✓ Multimodal Speech Payload Generated!")
+            st.json(payload)
     else:
-        st.warning("Please ingest or generate an audio sample above first.")
+        st.warning("Please ingest or upload an audio file in Section 2 above first.")
