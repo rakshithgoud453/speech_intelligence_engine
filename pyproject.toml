@@ -4,19 +4,30 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "speech-intelligence-engine"
-version = "0.1.0"
-description = "Speech foundation model representation and paralinguistic intelligence layer"
+version = "0.2.0"
+description = "A continual learning system that progressively develops internal representations of human speech"
 readme = "README.md"
 authors = [{ name = "Speech AI Team" }]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
+    # Core ML
     "torch>=2.0.0",
     "torchaudio>=2.0.0",
+    # Signal processing
     "librosa>=0.10.0",
     "soundfile>=0.12.0",
     "scipy>=1.10.0",
-    "numpy>=1.24.0"
+    "numpy>=1.24.0",
+    # Structure discovery (optional but recommended)
+    "umap-learn>=0.5.0",
+    "hdbscan>=0.8.30",
 ]
 
-[project.scripts]
-speech-intel = "speech_intelligence_engine.cli:main"
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["speech_intelligence_engine*"]
+
