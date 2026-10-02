@@ -374,9 +374,46 @@ class SpeechLearningEngine:
 
         return {"nodes": nodes, "edges": edges}
 
+    def query_multimodal_speech(
+        self,
+        audio_input: str | np.ndarray,
+        prompt: str = "Analyze the vocal tone, hesitation, and intent of the speaker.",
+        sr: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Query the native Speech Intelligence Engine on raw audio input.
+
+        Processes speech through the SSL encoder, extracts prosodic/phonetic
+        and semantic layer embeddings, and constructs a multimodal payload.
+        """
+        waveform, target_sr = self._load_audio(audio_input, sr)
+        embedding = self.encoder.encode(waveform, target_sr)
+        pooled_vector = embedding.pooled()
+
+        from .representation.projector import create_multimodal_speech_prompt
+        context = create_multimodal_speech_prompt(
+            speech_vector=pooled_vector,
+            prosody_stats={
+                "duration_sec": embedding.duration_sec,
+                "num_frames": float(embedding.num_frames),
+                "rms_mean": float(np.sqrt(np.mean(waveform ** 2))),
+            },
+            query_prompt=prompt,
+        )
+
+        state = self.get_state()
+        context["engine_state"] = {
+            "total_episodes_learned": state.total_episodes,
+            "prototypes_discovered": state.total_prototypes,
+            "learned_transitions": state.total_transitions,
+            "overall_novelty_rate": state.overall_novelty_rate,
+        }
+        return context
+
     # ═══════════════════════════════════════════════════════════════
     # PRIVATE: Audio Loading
     # ═══════════════════════════════════════════════════════════════
+
 
     def _load_audio(
         self,
